@@ -1,16 +1,18 @@
 import os
 import logging
 import shutil
-from typing import Literal
+from typing import Literal, AsyncGenerator
 from dotenv import load_dotenv
-
+import time
 from langchain_community.document_loaders import WebBaseLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_groq import ChatGroq
 from langchain_chroma import Chroma
-from langchain.chains import RetrievalQA
 from langchain.prompts import PromptTemplate
+from langchain.callbacks import AsyncIteratorCallbackHandler
+from langchain.schema import StrOutputParser
+from langchain.schema.runnable import RunnablePassthrough
 
 from urls import STRIPE_URLS, GOOGLE_AUTH_URLS
 
@@ -30,9 +32,9 @@ TOPIC_URLS = {
 
 
 SYSTEM_PROMPT = PromptTemplate( 
-    input_variables=["context", "question"],
-    template=""" You are a highly precise AI technical assistant specializing in system integrations.
-    Your job is to generate accurate, developer-ready implementation steps and code using ONLY the provided documentation context.
+input_variables=["context", "question"],
+template=""" You are a highly precise AI technical assistant specializing in system integrations.
+Your job is to generate accurate, developer-ready implementation steps and code using ONLY the provided documentation context.
 
 Your responses must be clear, structured, and production-ready — similar
 to a senior developer explaining integration steps.
@@ -43,24 +45,23 @@ with clean, runnable code based strictly on official documentation.
 STRICT RULES:
 
 1. ONLY use information from the provided context
-    - Do NOT hallucinate APIs, endpoints, parameters, SDK methods, or workflows
-    - Do NOT assume missing details
+- Do NOT hallucinate APIs, endpoints, parameters, SDK methods, or workflows
+- Do NOT assume missing details
 
 2. If the context is insufficient, respond EXACTLY with: “I don’t have enough documentation
 context to answer this accurately. Please refer to the official docs directly.”
- 
 3. Always generate:
-    - Clear numbered steps
-    - Clean runnable code
-    - Proper comments in code
-    - Best-practice implementation
+- Clear numbered steps
+- Clean runnable code
+- Proper comments in code
+- Best-practice implementation
 
 4. Code Requirements:
-    - Include imports
-    - Include environment variables if applicable
-    - Include error handling if mentioned in context
-    - Make code copy-paste ready
-    - Use proper formatting
+- Include imports
+- Include environment variables if applicable
+- Include error handling if mentioned in context
+- Make code copy-paste ready
+- Use proper formatting
 
 5. Response Structure (Always Follow):
 
@@ -74,13 +75,13 @@ Step 1: Description
 
 Explanation
 
-    # runnable code
+# runnable code
 
 Step 2: Description
 
 Explanation
 
-    # runnable code
+# runnable code
 
 Notes / Important Considerations
 
@@ -128,19 +129,27 @@ Answer (with steps and code):""",
 )
 
 
+def _format_docs(docs) -> str:
+    return "\n\n".join(doc.page_content for doc in docs)
+
+
 class RAGEngine:
     def __init__(self):
         self.embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
+
+        # Streaming LLM — used for the /chat/stream endpoint
         self.llm = ChatGroq(
             model="llama-3.1-8b-instant",
             temperature=0.3,
             groq_api_key=os.getenv("GROQ_API_KEY"),
+            streaming=True,               # ← enable streaming
         )
-        # Two completely isolated vectorstores — zero cross-contamination
+
         self.vectorstores: dict[str, Chroma] = {}
         for topic in ("stripe", "google_auth"):
             self._load_or_build(topic)
 
+    # ── Build / load ───────────────────────────────────────────────────────
     def _load_or_build(self, topic: str):
         persist_dir = CHROMA_DIRS[topic]
         if os.path.exists(persist_dir) and os.listdir(persist_dir):
@@ -182,24 +191,58 @@ class RAGEngine:
         )
         logger.info(f"[{topic}] Vectorstore built and persisted.")
 
+    # ── Retrieve source docs (shared by both query methods) ────────────────
+    def _get_sources(self, question: str, topic: str) -> list[str]:
+        retriever = self.vectorstores[topic].as_retriever(search_kwargs={"k": 4})
+        docs = retriever.invoke(question)
+        return list({doc.metadata.get("source", "") for doc in docs})
+
+    def _build_chain(self, topic: str):
+        """Build a streamable LCEL chain for the given topic."""
+        retriever = self.vectorstores[topic].as_retriever(search_kwargs={"k": 4})
+        chain = (
+            {
+                "context": retriever | _format_docs,
+                "question": RunnablePassthrough(),
+            }
+            | SYSTEM_PROMPT
+            | self.llm
+            | StrOutputParser()
+        )
+        return chain
+
+    # ── Non-streaming query (kept for /health checks / testing) ───────────
     def query(self, question: str, topic: Literal["stripe", "google_auth"]) -> dict:
         if topic not in self.vectorstores:
             raise RuntimeError(f"No vectorstore for topic '{topic}'.")
+        chain = self._build_chain(topic)
+        answer = chain.invoke(question)
+        sources = self._get_sources(question, topic)
+        return {"answer": answer, "sources": sources}
 
-        retriever = self.vectorstores[topic].as_retriever(search_kwargs={"k": 4})
+    # ── Streaming query ────────────────────────────────────────────────────
+    async def stream_query(
+        self,
+        question: str,
+        topic: Literal["stripe", "google_auth"],
+    ) -> AsyncGenerator[str, None]:
+        """Yields tokens as they arrive from Groq, then a final sources line."""
+        if topic not in self.vectorstores:
+            raise RuntimeError(f"No vectorstore for topic '{topic}'.")
 
-        qa_chain = RetrievalQA.from_chain_type(
-            llm=self.llm,
-            chain_type="stuff",
-            retriever=retriever,
-            return_source_documents=True,
-            chain_type_kwargs={"prompt": SYSTEM_PROMPT},
-        )
+        chain = self._build_chain(topic)
 
-        result = qa_chain.invoke({"query": question})
-        sources = list({doc.metadata.get("source", "") for doc in result["source_documents"]})
-        return {"answer": result["result"], "sources": sources}
+        # Stream tokens
+        async for token in chain.astream(question):
+            time.sleep(0.05)  # Simulate delay
+            yield token
 
+        # After all tokens, send sources as a special sentinel line
+        sources = self._get_sources(question, topic)
+        import json
+        yield f"\n\n__SOURCES__{json.dumps(sources)}"
+
+    # ── Re-ingestion ───────────────────────────────────────────────────────
     def reingest(self, topic: str | None = None):
         targets = [topic] if topic else ["stripe", "google_auth"]
         for t in targets:

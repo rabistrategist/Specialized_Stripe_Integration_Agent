@@ -11,7 +11,7 @@ const customStyle = {
   border: '1px solid #2a2a38',
 }
 
-export default function MessageBubble({ role, content, sources }) {
+export default function MessageBubble({ role, content, sources, isStreaming }) {
   const isUser = role === 'user'
 
   return (
@@ -35,7 +35,7 @@ export default function MessageBubble({ role, content, sources }) {
           letterSpacing: '0.08em',
           textTransform: 'uppercase',
         }}>
-          {isUser ? '▸ You' : '◆ Assistant'}
+          {isUser ? '▸ you' : '◆ docbot'}
         </span>
       </div>
 
@@ -53,53 +53,48 @@ export default function MessageBubble({ role, content, sources }) {
         {isUser ? (
           <span>{content}</span>
         ) : (
-          <ReactMarkdown
-            remarkPlugins={[remarkGfm]}
-            components={{
-              code({ node, inline, className, children, ...props }) {
-                const match = /language-(\w+)/.exec(className || '')
-                return !inline && match ? (
-                  <SyntaxHighlighter
-                    style={vscDarkPlus}
-                    customStyle={customStyle}
-                    language={match[1]}
-                    PreTag="div"
-                    {...props}
-                  >
-                    {String(children).replace(/\n$/, '')}
-                  </SyntaxHighlighter>
-                ) : (
-                  <code style={{
-                    fontFamily: 'var(--mono)',
-                    background: '#0d0d14',
-                    padding: '2px 6px',
-                    borderRadius: '4px',
-                    fontSize: '12px',
-                    color: 'var(--accent)',
-                  }} {...props}>
-                    {children}
-                  </code>
-                )
-              },
-              p({ children }) {
-                return <p style={{ marginBottom: '10px' }}>{children}</p>
-              },
-              ol({ children }) {
-                return <ol style={{ paddingLeft: '20px', marginBottom: '10px' }}>{children}</ol>
-              },
-              ul({ children }) {
-                return <ul style={{ paddingLeft: '20px', marginBottom: '10px' }}>{children}</ul>
-              },
-              li({ children }) {
-                return <li style={{ marginBottom: '4px' }}>{children}</li>
-              },
-              strong({ children }) {
-                return <strong style={{ color: 'var(--accent)', fontWeight: 600 }}>{children}</strong>
-              },
-            }}
-          >
-            {content}
-          </ReactMarkdown>
+          <>
+            <ReactMarkdown
+              remarkPlugins={[remarkGfm]}
+              components={{
+                code: ({ node, inline, className, children, ...props }) => {
+                  const match = /language-(\w+)/.exec(className || '')
+                  return !inline && match ? (
+                    <SyntaxHighlighter
+                      style={vscDarkPlus}
+                      customStyle={customStyle}
+                      language={match[1]}
+                      PreTag="div"
+                      {...props}
+                    >
+                      {String(children).replace(/\n$/, '')}
+                    </SyntaxHighlighter>
+                  ) : (
+                    <code style={{
+                      fontFamily: 'var(--mono)',
+                      background: '#0d0d14',
+                      padding: '2px 6px',
+                      borderRadius: '4px',
+                      fontSize: '12px',
+                      color: 'var(--accent)',
+                    }} {...props}>
+                      {children}
+                    </code>
+                  )
+                },
+                p: ({ children }) => <p style={{ marginBottom: '10px' }}>{children}</p>,
+                ol: ({ children }) => <ol style={{ paddingLeft: '20px', marginBottom: '10px' }}>{children}</ol>,
+                ul: ({ children }) => <ul style={{ paddingLeft: '20px', marginBottom: '10px' }}>{children}</ul>,
+                li: ({ children }) => <li style={{ marginBottom: '4px' }}>{children}</li>,
+                strong: ({ children }) => <strong style={{ color: 'var(--accent)', fontWeight: 600 }}>{children}</strong>,
+              }}
+            >
+              {content}
+            </ReactMarkdown>
+            {isStreaming && (
+              <span style={{ display: "inline-block", width: "8px", height: "14px", background: "var(--accent)", marginLeft: "2px", borderRadius: "2px", animation: "pulse 0.8s ease infinite", verticalAlign: "middle" }} />
+            )}
+          </>
         )}
       </div>
 

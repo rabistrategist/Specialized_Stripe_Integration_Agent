@@ -4,7 +4,7 @@ A RAG-powered documentation chatbot that provides accurate, sourced answers abou
 
 ![Project Banner](https://via.placeholder.com/800x200/0f0f17/ffffff?text=LangChain+Agent+-+DocBot)
 
-Project Demo: <video controls src="Screencast from 03-26-2026 05:00:32 PM.webm" title="Title"></video>
+Project Demo: 
 
 ## 🚀 Features
 
