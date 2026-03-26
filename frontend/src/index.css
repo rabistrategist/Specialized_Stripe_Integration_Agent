@@ -1,0 +1,40 @@
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600&family=Syne:wght@400;600;700;800&display=swap');
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg:        #0f0f17;
+  --surface:   #21212d;
+  --surface2:  #18181f;
+  --border:    #2a2a38;
+  --stripe:    #635bff;
+  --stripe-glow: rgba(99,91,255,0.25);
+  --google:    #4285f4;
+  --google-glow: rgba(66,133,244,0.25);
+  --text:      #e8e8f0;
+  --muted:     #6b6b80;
+  --accent:    #a0f0c0;
+  --user-msg:  #1e1e2e;
+  --bot-msg:   #13131c;
+  --radius:    12px;
+  --mono:      'JetBrains Mono', monospace;
+  --sans:      'Syne', sans-serif;
+}
+
+html, body, #root {
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 99px; }
+::-webkit-scrollbar-thumb:hover { background: var(--muted); }
+
+/* Code blocks from react-syntax-highlighter — override background */
+pre { border-radius: 8px !important; font-size: 13px !important; }
+code { font-family: var(--mono) !important; }
