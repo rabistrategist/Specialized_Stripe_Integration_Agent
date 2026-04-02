@@ -1,5 +1,5 @@
 
-https://github.com/user-attachments/assets/f4f87e8f-5858-4040-93f3-ee0ad4f13ae3
+https://github.com/user-attachments/assets/d9c28c3a-7b3e-45f9-8393-2cb92490f2bb
 # LangChain Agent (Coding Agent)
 
 A RAG-powered documentation chatbot that provides accurate, sourced answers about Stripe and Google Auth integrations. Built with FastAPI backend and React frontend.
@@ -7,7 +7,8 @@ A RAG-powered documentation chatbot that provides accurate, sourced answers abou
 ![Project Banner](https://via.placeholder.com/800x200/0f0f17/ffffff?text=LangChain+Agent+-+DocBot)
 
 
-Project Demo: https://github.com/user-attachments/assets/fbf3965f-bc0e-4f6a-b0bd-4d7f70b53aa2
+Project Demo: Uploading Screencast from 04-02-2026 06-23-14 PM.mp4…
+
 
 
 ## 🚀 Features
